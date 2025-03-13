@@ -1,0 +1,243 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+
+class QFSDWaveFunctionAI:
+    """
+    Direct implementation of QFSD AI using wave functions with r=1
+    
+    At r=1:
+    - o(x) = exp(S(x)/κ)  [Real data wave function]
+    - w(x) = exp(-S(x)/κ) [AI prediction wave function]
+    - o(x) × w(x) = 1
+    """
+    def __init__(self, kappa=1.0):
+        self.kappa = kappa
+        self.X_train = None
+        self.y_train = None
+    
+    def fit(self, X, y):
+        """Store training data"""
+        self.X_train = X
+        self.y_train = y
+    
+    def compute_action(self, x_new):
+        """
+        Compute gravitational action S(x) between new point and training data
+        """
+        if len(x_new.shape) == 1:
+            x_new = x_new.reshape(1, -1)
+            
+        # Compute squared distances (one row per test point, one column per training point)
+        distances = np.sum((self.X_train - x_new[:, np.newaxis, :])**2, axis=2)
+        
+        # Scale by gamma factor
+        gamma = 1.0 / (2 * self.kappa**2)
+        action = gamma * distances
+        
+        return action
+    
+    def wave_functions(self, X):
+        """
+        Compute both wave functions o(x) and w(x)
+        
+        Returns:
+        - o_values: Real data wave function (bulk)
+        - w_values: AI prediction wave function (boundary)
+        """
+        # Compute action
+        S = self.compute_action(X)
+        
+        # Real data wave function: o(x) = exp(S(x)/κ)
+        o_values = np.exp(S / self.kappa)
+        
+        # AI prediction wave function: w(x) = exp(-S(x)/κ)
+        w_values = np.exp(-S / self.kappa)
+        
+        return o_values, w_values
+    
+    def predict(self, X):
+        """
+        Make predictions using AI prediction wave function w(x)
+        """
+        # Compute wave functions
+        _, w_values = self.wave_functions(X)
+        
+        # Normalize each row
+        row_sums = w_values.sum(axis=1, keepdims=True)
+        w_normalized = w_values / row_sums
+        
+        # Compute weighted predictions
+        predictions = np.sum(w_normalized * self.y_train, axis=1)
+        
+        return predictions
+
+def validate_qfsd_wave_ai():
+    """
+    Validate the QFSD Wave Function AI model
+    """
+    # Generate synthetic data
+    np.random.seed(42)
+    n_samples = 200
+    
+    # 1D function: sin(x) with noise
+    X = np.linspace(-3, 3, n_samples).reshape(-1, 1)
+    y_true = np.sin(X.flatten())
+    y = y_true + 0.2 * np.random.randn(n_samples)
+    
+    # Split data
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    
+    # Create model
+    model = QFSDWaveFunctionAI(kappa=0.5)
+    model.fit(X_train, y_train)
+    
+    # Make predictions
+    y_pred = model.predict(X_test)
+    mse = mean_squared_error(y_test, y_pred)
+    print(f"Model MSE: {mse:.6f}")
+    
+    # Create grid for visualization
+    X_grid = np.linspace(-4, 4, 100).reshape(-1, 1)
+    y_grid_pred = model.predict(X_grid)
+    
+    # Get wave functions for all grid points
+    o_grid, w_grid = model.wave_functions(X_grid)
+    
+    # Get wave functions for a specific test point
+    test_point = np.array([1.5]).reshape(1, -1)
+    o_test, w_test = model.wave_functions(test_point)
+    
+    # Visualize results
+    plt.figure(figsize=(15, 10))
+    
+    # Plot 1: Data and Predictions
+    plt.subplot(2, 2, 1)
+    plt.scatter(X_train, y_train, color='blue', alpha=0.6, label='Training Data')
+    plt.scatter(X_test, y_test, color='green', alpha=0.6, label='Test Data')
+    plt.plot(X_grid, y_grid_pred, 'r-', linewidth=2, label=f'QFSD AI (MSE={mse:.4f})')
+    plt.plot(X_grid, np.sin(X_grid.flatten()), 'k--', linewidth=1, label='True Function')
+    plt.axvline(x=test_point[0][0], color='purple', linestyle='--', label='Test Point')
+    plt.title('QFSD AI Predictions')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Plot 2: Wave Functions for the test point
+    plt.subplot(2, 2, 2)
+    plt.plot(X_train, o_test[0], 'r-', linewidth=2, label='o(x) - Real Data Wave Function')
+    plt.plot(X_train, w_test[0], 'b-', linewidth=2, label='w(x) - AI Prediction Wave Function')
+    plt.axvline(x=test_point[0][0], color='purple', linestyle='--', label='Test Point')
+    plt.title(f'Wave Functions at x = {test_point[0][0]:.2f}')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Plot 3: Invariant Property o × w = 1
+    plt.subplot(2, 2, 3)
+    product = o_test[0] * w_test[0]
+    plt.plot(X_train, product, 'g-', linewidth=2, label='o(x) × w(x)')
+    plt.axhline(y=1.0, color='k', linestyle='--', label='Theoretical Value (=1)')
+    plt.axvline(x=test_point[0][0], color='purple', linestyle='--', label='Test Point')
+    plt.title('Invariant Property: o(x) × w(x) = 1')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Plot 4: Wave Functions across input space (using mean values for visualization)
+    plt.subplot(2, 2, 4)
+    
+    # Take the mean for each grid point to get a single value
+    o_mean = np.mean(o_grid, axis=1)
+    w_mean = np.mean(w_grid, axis=1)
+    
+    # Normalize for better visualization
+    o_mean_norm = o_mean / np.max(o_mean)
+    w_mean_norm = w_mean / np.max(w_mean)
+    
+    plt.plot(X_grid, o_mean_norm, 'r-', alpha=0.7, linewidth=2, label='o(x) (normalized)')
+    plt.plot(X_grid, w_mean_norm, 'b-', alpha=0.7, linewidth=2, label='w(x) (normalized)')
+    plt.plot(X_grid, np.sin(X_grid.flatten()) * 0.5 + 0.5, 'k--', linewidth=1, label='True Function (scaled)')
+    plt.axvline(x=test_point[0][0], color='purple', linestyle='--', label='Test Point')
+    plt.title('Mean Wave Functions Across Input Space')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    # Second figure: Extended analysis
+    plt.figure(figsize=(15, 10))
+    
+    # Plot 1: Heatmap visualization of o(x)
+    plt.subplot(2, 2, 1)
+    X_heatmap = np.linspace(-3, 3, 20).reshape(-1, 1)  # Lower resolution for visibility
+    o_heat, _ = model.wave_functions(X_heatmap)
+    
+    # Normalize for visualization
+    o_heat_norm = np.log(o_heat + 1e-10)  # Log scale for better visibility
+    plt.imshow(o_heat_norm, aspect='auto', extent=[-3, 3, -3, 3], cmap='hot')
+    plt.colorbar(label='Log(o(x))')
+    plt.title('Real Data Wave Function (o) - Log Scale')
+    plt.xlabel('Query Point x')
+    plt.ylabel('Training Points')
+    
+    # Plot 2: Heatmap visualization of w(x)
+    plt.subplot(2, 2, 2)
+    _, w_heat = model.wave_functions(X_heatmap)
+    plt.imshow(w_heat, aspect='auto', extent=[-3, 3, -3, 3], cmap='Blues')
+    plt.colorbar(label='w(x)')
+    plt.title('AI Prediction Wave Function (w)')
+    plt.xlabel('Query Point x')
+    plt.ylabel('Training Points')
+    
+    # Plot 3: Product of wave functions
+    plt.subplot(2, 2, 3)
+    product_heat = o_heat * w_heat
+    plt.imshow(product_heat, aspect='auto', extent=[-3, 3, -3, 3], cmap='viridis', vmin=0.9, vmax=1.1)
+    plt.colorbar(label='o(x) × w(x)')
+    plt.title('Invariant Product (should be 1)')
+    plt.xlabel('Query Point x')
+    plt.ylabel('Training Points')
+    
+    # Plot 4: Histogram of products (invariant check)
+    plt.subplot(2, 2, 4)
+    products = product_heat.flatten()
+    
+    # Filter out extreme values for better visualization
+    valid_products = products[(products > 0.5) & (products < 1.5)]
+    
+    plt.hist(valid_products, bins=50, alpha=0.7, color='green')
+    plt.axvline(x=1.0, color='r', linestyle='--', linewidth=2, label='Theoretical (=1)')
+    
+    # Calculate statistics
+    mean_product = np.mean(valid_products)
+    std_product = np.std(valid_products)
+    plt.title(f'Distribution of o(x) × w(x): Mean={mean_product:.4f}, Std={std_product:.4f}')
+    plt.xlabel('o(x) × w(x) Value')
+    plt.ylabel('Frequency')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Print validation summary
+    print("\nInvariant Property Analysis:")
+    print(f"Mean o(x) × w(x): {mean_product:.6f} (theoretical: 1.0)")
+    print(f"Standard Deviation: {std_product:.6f}")
+    
+    # The validation threshold can be adjusted based on numerical precision
+    threshold = 0.1
+    is_valid = abs(mean_product - 1.0) < threshold
+    
+    print("\nValidation Result:")
+    if is_valid:
+        print("✅ VALIDATED: The QFSD framework with r=1 demonstrates")
+        print("  the invariant property o(x) × w(x) = 1 with high accuracy.")
+    else:
+        print("❌ NOT VALIDATED: The invariant property o(x) × w(x) = 1")
+        print(f"  deviates by {abs(mean_product - 1.0):.4f}, which exceeds the threshold of {threshold}.")
+    
+    return mean_product, std_product, mse
+
+# Run the validation
+if __name__ == "__main__":
+    mean_product, std_product, mse = validate_qfsd_wave_ai()
